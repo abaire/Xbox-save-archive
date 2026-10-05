@@ -13,16 +13,12 @@ jobs:
       chunks: ${{ steps.get-dirs.outputs.chunks }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Get list of directories and chunk them
         id: get-dirs
         run: |
           cd "Xbox saves"
-          # Get all directories in "Xbox saves" and output them as a JSON array
-          # Since there are over 600 directories, which exceeds the max matrix size (256),
-          # we chunk them into at most 256 chunks.
-          # Here we chunk them into 64 chunks for good parallelism without hitting limits.
           CHUNKS=$(find . -mindepth 1 -maxdepth 1 -type d -print0 | xargs -0 -n1 basename | jq -R -s -c 'split("\n")[:-1] | [_nwise((length/64) | ceil)] | to_entries | map({id: .key, dirs: .value})')
           echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
 
@@ -38,7 +34,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Zip directory contents for chunk
         env:
@@ -61,7 +57,7 @@ jobs:
           done
 
       - name: Upload zip artifacts for chunk
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: chunk-${{ matrix.chunk.id }}
           path: ${{ runner.temp }}/chunk_zips/*.zip
@@ -75,10 +71,10 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download all zip artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
