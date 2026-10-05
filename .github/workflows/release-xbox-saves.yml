@@ -100,12 +100,14 @@ jobs:
           TAG_NAME="release-$(date +'%Y%m%d-%H%M%S')"
           RELEASE_TITLE="Xbox Saves Release $(date +'%Y-%m-%d %H:%M:%S')"
 
-          # 1. Create the release container first without attached files
-          gh release create "$TAG_NAME" \
+          # Create release and extract asset upload endpoint
+          RELEASE_JSON=$(gh release create "$TAG_NAME" \
             --title "$RELEASE_TITLE" \
-            --notes "Automated release of Xbox saves."
+            --notes "Automated release of Xbox saves." \
+            --json id,upload_url)
 
-          # 2. Upload assets in batches to bypass Linux ARG_MAX buffer limits
-          # Null bytes handle arbitrary spaces, quotes, and UTF-8 characters cleanly
-          find artifacts -maxdepth 1 -type f -name '*.zip' -print0 | \
-            xargs -0 -n 50 -P 4 gh release upload "$TAG_NAME" --clobber
+          RELEASE_ID=$(echo "$RELEASE_JSON" | jq -r .id)
+          UPLOAD_URL=$(echo "$RELEASE_JSON" | jq -r .upload_url | sed 's/{?name,label}//')
+
+          echo "Created release ID $RELEASE_ID. Invoking upload runner..."
+          python3 .github/scripts/upload_release_assets.py artifacts
