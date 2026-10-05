@@ -1,0 +1,102 @@
+name: Release Xbox Saves
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      chunks: ${{ steps.get-dirs.outputs.chunks }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Get list of directories and chunk them
+        id: get-dirs
+        run: |
+          cd "Xbox saves"
+          CHUNKS=$(find . -mindepth 1 -maxdepth 1 -type d -print0 | xargs -0 -n1 basename | jq -R -s -c 'split("\n")[:-1] | [_nwise((length/64) | ceil)] | to_entries | map({id: .key, dirs: .value})')
+          echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
+
+  build:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        chunk: ${{ fromJson(needs.prepare.outputs.chunks) }}
+      # Allow continuing if one directory fails
+      fail-fast: false
+      max-parallel: 64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Zip directory contents for chunk
+        env:
+          DIRS_JSON: ${{ toJson(matrix.chunk.dirs) }}
+        run: |
+          # Create a directory to hold all the zipped files for this chunk
+          mkdir -p "${RUNNER_TEMP}/chunk_zips"
+
+          # Read the directories for this chunk
+          echo "$DIRS_JSON" | jq -r '.[]' | while read -r DIR_NAME; do
+            echo "Processing: $DIR_NAME"
+            cd "Xbox saves/$DIR_NAME"
+
+            # Zip the contents of the directory (not the directory itself)
+            # We place the zip file in the runner's temp directory
+            zip -r "${RUNNER_TEMP}/chunk_zips/${DIR_NAME}.zip" .
+
+            # Go back to the root
+            cd ../..
+          done
+
+      - name: Upload zip artifacts for chunk
+        uses: actions/upload-artifact@v7
+        with:
+          name: chunk-${{ matrix.chunk.id }}
+          path: ${{ runner.temp }}/chunk_zips/*.zip
+          # We only need these artifacts for the release job
+          retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Download all zip artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create Dynamic Release and Update Latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 1. Generate a dynamic date tag for the release
+          TAG_NAME="release-$(date +'%Y%m%d-%H%M%S')"
+          RELEASE_TITLE="Xbox Saves Release $(date +'%Y-%m-%d %H:%M:%S')"
+
+          # 2. Create the new dynamically-named release with all the downloaded zip files
+          echo "Creating new release: $TAG_NAME"
+          # Depending on the number of files, this command might be too long.
+          # We can pass the files directly if it's within ARG_MAX.
+          gh release create "$TAG_NAME" artifacts/*.zip --title "$RELEASE_TITLE" --notes "Automated release of Xbox saves."
+
+          # 3. Update the 'latest' tag
+          echo "Updating 'latest' release tag"
+          # Try to delete the old 'latest' release and tag if it exists (ignore errors if it doesn't)
+          gh release delete latest --cleanup-tag -y || true
+
+          # Create the new 'latest' release pointing to the same commit/state
+          gh release create latest artifacts/*.zip --title "Latest Xbox Saves" --notes "Continuously updated latest release of Xbox saves." --latest
