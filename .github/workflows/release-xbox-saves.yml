@@ -93,21 +93,12 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: Create Dynamic Release and Update Latest
+      - name: Create Dynamic Release and Upload Assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          TAG_NAME="release-$(date +'%Y%m%d-%H%M%S')"
-          RELEASE_TITLE="Xbox Saves Release $(date +'%Y-%m-%d %H:%M:%S')"
+          export TAG_NAME="release-$(date +'%Y%m%d-%H%M%S')"
+          export RELEASE_TITLE="Xbox Saves Release $(date +'%Y-%m-%d %H:%M:%S')"
 
-          # Create release and extract asset upload endpoint
-          RELEASE_JSON=$(gh release create "$TAG_NAME" \
-            --title "$RELEASE_TITLE" \
-            --notes "Automated release of Xbox saves." \
-            --json id,upload_url)
-
-          RELEASE_ID=$(echo "$RELEASE_JSON" | jq -r .id)
-          UPLOAD_URL=$(echo "$RELEASE_JSON" | jq -r .upload_url | sed 's/{?name,label}//')
-
-          echo "Created release ID $RELEASE_ID. Invoking upload runner..."
           python3 .github/scripts/upload_release_assets.py artifacts
