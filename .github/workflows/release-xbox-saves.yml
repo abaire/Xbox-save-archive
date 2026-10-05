@@ -83,20 +83,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 1. Generate a dynamic date tag for the release
           TAG_NAME="release-$(date +'%Y%m%d-%H%M%S')"
           RELEASE_TITLE="Xbox Saves Release $(date +'%Y-%m-%d %H:%M:%S')"
 
-          # 2. Create the new dynamically-named release with all the downloaded zip files
           echo "Creating new release: $TAG_NAME"
-          # Depending on the number of files, this command might be too long.
-          # We can pass the files directly if it's within ARG_MAX.
-          gh release create "$TAG_NAME" artifacts/*.zip --title "$RELEASE_TITLE" --notes "Automated release of Xbox saves."
-
-          # 3. Update the 'latest' tag
-          echo "Updating 'latest' release tag"
-          # Try to delete the old 'latest' release and tag if it exists (ignore errors if it doesn't)
-          gh release delete latest --cleanup-tag -y || true
-
-          # Create the new 'latest' release pointing to the same commit/state
-          gh release create latest artifacts/*.zip --title "Latest Xbox Saves" --notes "Continuously updated latest release of Xbox saves." --latest
+          find artifacts -name "*.zip" -type f -print0 | xargs -0 gh release create "$TAG_NAME" --title "$RELEASE_TITLE" --notes "Automated release of Xbox saves."
