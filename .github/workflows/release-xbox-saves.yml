@@ -87,4 +87,5 @@ jobs:
           RELEASE_TITLE="Xbox Saves Release $(date +'%Y-%m-%d %H:%M:%S')"
 
           echo "Creating new release: $TAG_NAME"
-          find artifacts -name "*.zip" -type f -print0 | xargs -0 gh release create "$TAG_NAME" --title "$RELEASE_TITLE" --notes "Automated release of Xbox saves."
+          files=(artifacts/*.zip)
+          gh release create "$TAG_NAME" --title "$RELEASE_TITLE" --notes "Automated release of Xbox saves." "${files[@]}"          
